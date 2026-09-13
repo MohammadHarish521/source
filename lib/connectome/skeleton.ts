@@ -20,8 +20,8 @@ function finishMorphology(
   let sx = 0;
   let sy = 0;
   let sz = 0;
-  let min: [number, number, number] = [Infinity, Infinity, Infinity];
-  let max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+  const min: [number, number, number] = [Infinity, Infinity, Infinity];
+  const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
 
   for (const [x, y, z] of positions) {
     sx += x;

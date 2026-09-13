@@ -4,7 +4,7 @@ import { DATA_DIR, collections } from "@/lib/db";
 import { csr } from "./csr";
 import { ARCHETYPE_TITLES, archetypeFor, defaultStats } from "./archetypes";
 import { getDirectedNeighbors, getNeighbors, pickConnectedPair, removalExperiment, shortestPath } from "./graph";
-import { ensureIngest, ensureMetadata, getIngestStatus } from "./ingest";
+import { ensureIngest, ensureMetadata } from "./ingest";
 import { REGION_GUIDES } from "./regions";
 import { neuprintConfigured } from "./neuprint";
 import { downsampleMorphology, parseNeuroglancerSkeleton, parseSwcSkeleton } from "./skeleton";

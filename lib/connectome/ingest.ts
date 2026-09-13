@@ -1,6 +1,6 @@
-import { collections, getMeta, mongoConfigured, setMeta } from "@/lib/db";
+import { collections, getMeta, mongoConfigured } from "@/lib/db";
 import { loadCsr } from "./csr";
-import { DATASET, PUBLIC_STATS } from "./sources";
+import { PUBLIC_STATS } from "./sources";
 import type { IngestStatus } from "./types";
 
 let status: IngestStatus = {

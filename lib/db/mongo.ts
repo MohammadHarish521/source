@@ -63,7 +63,7 @@ async function ensureIndexes(db: Db) {
   ]);
 }
 
-export type Doc = { _id?: string; [key: string]: any };
+export type Doc = Document & { _id?: string };
 
 export type UserRow = {
   id: string;

@@ -85,6 +85,14 @@ export function HomeExperience() {
 
       <section className="mx-auto grid max-w-7xl gap-8 px-5 pb-20 md:grid-cols-2">
         <div className="panel p-6">
+          <p className="label">TODAY THE FLY RAN</p>
+          <h2 className="mt-2 text-3xl">A walk on real wiring</h2>
+          <p className="mt-3 text-[var(--muted)]">Official connections. Our extra weights are labeled training.</p>
+          <Link href="/today" className="mt-6 inline-block border border-[var(--accent)] px-4 py-2 text-[var(--accent)]">
+            SEE TODAY
+          </Link>
+        </div>
+        <div className="panel p-6">
           <p className="label">TODAY’S FLY</p>
           <h2 className="mt-2 text-3xl">Six Degrees of Fly</h2>
           <p className="mt-3 text-[var(--muted)]">Same start. Same target. Everyone on earth.</p>

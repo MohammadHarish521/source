@@ -143,6 +143,19 @@ export const analytics = sqliteTable("analytics", {
   count: integer("count").notNull().default(0),
 });
 
+export const dailyRuns = sqliteTable("daily_runs", {
+  day: text("day").primaryKey(),
+  payload: text("payload").notNull(),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const dailyWeights = sqliteTable("daily_weights", {
+  pre: text("pre").notNull(),
+  post: text("post").notNull(),
+  bonus: integer("bonus").notNull().default(1),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 export const visits = sqliteTable(
   "visits",
   {

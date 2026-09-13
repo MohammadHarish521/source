@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["better-sqlite3", "apache-arrow"],
+  serverExternalPackages: ["better-sqlite3"],
 };
 
 export default nextConfig;

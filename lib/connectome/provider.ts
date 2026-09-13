@@ -5,6 +5,7 @@ import { ARCHETYPE_TITLES, archetypeFor, defaultStats } from "./archetypes";
 import { getDirectedNeighbors, getNeighbors, pickConnectedPair, removalExperiment, shortestPath } from "./graph";
 import { ensureIngest, ensureMetadata, getIngestStatus } from "./ingest";
 import { REGION_GUIDES } from "./regions";
+import { neuprintConfigured } from "./neuprint";
 import { downsampleMorphology, parseNeuroglancerSkeleton, parseSwcSkeleton } from "./skeleton";
 import { DATASET, MIN_SYNAPSES, PUBLIC_STATS, REMOTE } from "./sources";
 import type {
@@ -145,8 +146,12 @@ export class McnsProvider implements ConnectomeProvider {
         REMOTE.annotationsFeather,
         REMOTE.tracedWeights,
         REMOTE.skeletonsSwc,
-        DATASET.explorers.project,
+        DATASET.explorers.neuprint,
       ],
+      live: {
+        neuprint: neuprintConfigured(),
+        dataset: DATASET.id,
+      },
     };
   }
 

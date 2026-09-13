@@ -1,8 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import * as schema from "./schema";
 
 const DATA_DIR = path.join(process.cwd(), ".cache");
 const DB_PATH = path.join(DATA_DIR, "fly-mcns-v1.db");
@@ -143,6 +141,20 @@ function migrate(db: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS visits_user ON visits(user_id);
     CREATE INDEX IF NOT EXISTS visits_root ON visits(root_id);
+
+    CREATE TABLE IF NOT EXISTS daily_runs (
+      day TEXT PRIMARY KEY,
+      payload TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS daily_weights (
+      pre TEXT NOT NULL,
+      post TEXT NOT NULL,
+      bonus INTEGER NOT NULL DEFAULT 1,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (pre, post)
+    );
   `);
 }
 
@@ -152,10 +164,6 @@ export function getSqlite() {
   sqlite = new Database(DB_PATH);
   migrate(sqlite);
   return sqlite;
-}
-
-export function getDb() {
-  return drizzle(getSqlite(), { schema });
 }
 
 export function getMeta(key: string) {

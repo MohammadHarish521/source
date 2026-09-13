@@ -27,6 +27,10 @@ export function NeuronExperience({ rootId }: { rootId: string }) {
     queryKey: ["morph", rootId],
     queryFn: () => fetch(`/api/neuron/${rootId}/morphology`).then((r) => r.json() as Promise<Morphology>),
   });
+  const live = useQuery({
+    queryKey: ["live", rootId],
+    queryFn: () => fetch(`/api/neuron/${rootId}/live`).then((r) => r.json()),
+  });
   const me = useQuery({ queryKey: ["me"], queryFn: () => fetch("/api/me").then((r) => r.json()) });
   const claim = useMutation({
     mutationFn: async () => {
@@ -104,6 +108,16 @@ export function NeuronExperience({ rootId }: { rootId: string }) {
           <Fact label="SIDE" value={neuron?.side} kind="DATA" />
           <Fact label="FLOW" value={neuron?.flow} kind="DATA" />
           <Fact label="NT (PRED.)" value={neuron?.neurotransmitter} kind="DATA" />
+          <Fact
+            label="LIVE NEUPRINT PRE"
+            value={live.data?.neuron?.pre != null ? formatNumber(live.data.neuron.pre) : live.data?.error ? "—" : "…"}
+            kind="DATA"
+          />
+          <Fact
+            label="LIVE NEUPRINT POST"
+            value={live.data?.neuron?.post != null ? formatNumber(live.data.neuron.post) : live.data?.error ? "—" : "…"}
+            kind="DATA"
+          />
           <Fact label="INPUT PARTNERS" value={formatNumber(partners.data?.inputPartners ?? neuron?.inputPartners)} kind="DERIVED METRIC" />
           <Fact label="OUTPUT PARTNERS" value={formatNumber(partners.data?.outputPartners ?? neuron?.outputPartners)} kind="DERIVED METRIC" />
           <Fact label="CABLE" value={formatUm(morph.data?.cableLengthNm ?? neuron?.cableLengthNm)} kind="DATA" />

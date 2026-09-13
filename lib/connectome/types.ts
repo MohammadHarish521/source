@@ -127,6 +127,10 @@ export type DatasetInfo = {
   };
   ingest: IngestStatus;
   sources: string[];
+  live?: {
+    neuprint: boolean;
+    dataset: string;
+  };
 };
 
 export type IngestStage =

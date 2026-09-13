@@ -1,7 +1,7 @@
 "use client";
 
-import { Line, OrbitControls } from "@react-three/drei";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Line } from "@react-three/drei";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
@@ -10,7 +10,7 @@ import type { DailyScene, DailySceneNode } from "@/lib/fly/daily";
 const SCALE = 0.001;
 
 function originOf(scene: DailyScene) {
-  const pts = [...scene.attempt, ...scene.lesson, ...scene.cloud.slice(0, 200)];
+  const pts = [...scene.attempt, ...scene.lesson];
   if (!pts.length) return new THREE.Vector3();
   const o = new THREE.Vector3();
   for (const p of pts) o.add(new THREE.Vector3(p.x, p.y, p.z));
@@ -52,7 +52,7 @@ function PathLine({ points, color, dashed }: { points: THREE.Vector3[]; color: s
       gapSize={1.4}
       transparent
       opacity={dashed ? 0.45 : 0.95}
-      lineWidth={1.6}
+      lineWidth={3}
     />
   );
 }
@@ -61,11 +61,13 @@ function HopMarks({
   nodes,
   origin,
   color,
+  radius,
   onPick,
 }: {
   nodes: DailySceneNode[];
   origin: THREE.Vector3;
   color: string;
+  radius: number;
   onPick?: (id: string) => void;
 }) {
   return (
@@ -81,8 +83,8 @@ function HopMarks({
               onPick?.(node.rootId);
             }}
           >
-            <sphereGeometry args={[1.35, 12, 12]} />
-            <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.45} />
+            <sphereGeometry args={[radius, 12, 12]} />
+            <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.55} />
           </mesh>
         );
       })}
@@ -102,6 +104,10 @@ function FlyMesh() {
 
   return (
     <group>
+      <mesh>
+        <sphereGeometry args={[2.1, 16, 16]} />
+        <meshBasicMaterial color="#b6ff4a" transparent opacity={0.16} depthWrite={false} />
+      </mesh>
       <mesh position={[0, 0, 0.95]} scale={[0.42, 0.3, 1.05]}>
         <sphereGeometry args={[0.55, 14, 14]} />
         <meshStandardMaterial color="#8d9a78" roughness={0.4} />
@@ -134,36 +140,61 @@ function FlyMesh() {
   );
 }
 
-function Traveler({ points }: { points: THREE.Vector3[] }) {
+function pathAt(points: THREE.Vector3[], elapsed: number) {
+  const span = Math.max(10, (points.length - 1) * 3);
+  const t = (elapsed / span) % 1;
+  const f = t * Math.max(1, points.length - 1);
+  const i = Math.min(Math.max(0, points.length - 2), Math.floor(f));
+  const frac = f - i;
+  const a = points[i];
+  const b = points[Math.min(i + 1, points.length - 1)];
+  const pos = new THREE.Vector3().lerpVectors(a, b, frac);
+  return { pos, look: b, span };
+}
+
+function Traveler({ points, scale }: { points: THREE.Vector3[]; scale: number }) {
   const ref = useRef<THREE.Group>(null);
-  const span = Math.max(8, (points.length - 1) * 2.4);
 
   useFrame(({ clock }) => {
     if (!ref.current || points.length < 2) return;
-    const t = (clock.elapsedTime / span) % 1;
-    const f = t * (points.length - 1);
-    const i = Math.min(points.length - 2, Math.floor(f));
-    const frac = f - i;
-    const a = points[i];
-    const b = points[i + 1];
-    ref.current.position.lerpVectors(a, b, frac);
-    const look = b.clone().add(b.clone().sub(a));
+    const { pos, look } = pathAt(points, clock.elapsedTime);
+    ref.current.position.copy(pos);
     ref.current.lookAt(look);
   });
 
   if (points.length === 1) {
     return (
-      <group position={points[0]} scale={3.4}>
+      <group position={points[0]} scale={scale}>
+        <pointLight color="#b6ff4a" intensity={2.2} distance={scale * 18} />
         <FlyMesh />
       </group>
     );
   }
 
   return (
-    <group ref={ref} scale={3.4}>
+    <group ref={ref} scale={scale}>
+      <pointLight color="#b6ff4a" intensity={2.2} distance={scale * 18} />
       <FlyMesh />
     </group>
   );
+}
+
+function FollowCam({ points, size }: { points: THREE.Vector3[]; size: number }) {
+  const { camera } = useThree();
+  useFrame(({ clock }) => {
+    if (points.length < 2) return;
+    const { pos, look } = pathAt(points, clock.elapsedTime);
+    const ahead = look.clone().sub(pos);
+    if (ahead.lengthSq() < 0.0001) ahead.set(0, 0, 1);
+    ahead.normalize();
+    const desired = pos
+      .clone()
+      .add(ahead.clone().multiplyScalar(-size * 0.42))
+      .add(new THREE.Vector3(0, size * 0.22, 0));
+    camera.position.lerp(desired, 0.045);
+    camera.lookAt(pos);
+  });
+  return null;
 }
 
 function SceneBody({ scene, interactive }: { scene: DailyScene; interactive: boolean }) {
@@ -173,23 +204,34 @@ function SceneBody({ scene, interactive }: { scene: DailyScene; interactive: boo
   const lesson = useMemo(() => scene.lesson.map((n) => toVec(n, origin)), [origin, scene.lesson]);
   const cam = useMemo(() => {
     const pts = attempt.length ? attempt : lesson;
-    if (!pts.length) return { position: [0, 20, 140] as [number, number, number], target: [0, 0, 0] as [number, number, number] };
+    if (!pts.length) {
+      return {
+        position: [0, 20, 140] as [number, number, number],
+        target: [0, 0, 0] as [number, number, number],
+        size: 140,
+        hopR: 2,
+        flyScale: 8,
+      };
+    }
     const box = new THREE.Box3().setFromPoints(pts);
     const center = box.getCenter(new THREE.Vector3());
     const size = Math.max(28, box.getSize(new THREE.Vector3()).length());
     return {
-      position: [center.x, center.y + size * 0.18, center.z + size * 1.15] as [number, number, number],
+      position: [center.x + size * 0.15, center.y + size * 0.22, center.z + size * 1.05] as [number, number, number],
       target: [center.x, center.y, center.z] as [number, number, number],
+      size,
+      hopR: size * 0.012,
+      flyScale: size * 0.09,
     };
   }, [attempt, lesson]);
 
   return (
     <>
       <color attach="background" args={["#070708"]} />
-      <fog attach="fog" args={["#070708", 90, 320]} />
-      <ambientLight intensity={0.4} />
-      <pointLight position={[50, 70, 40]} intensity={1.5} color="#b6ff4a" />
-      <pointLight position={[-40, -10, 30]} intensity={0.7} color="#67f0c8" />
+      <fog attach="fog" args={["#070708", cam.size * 0.9, cam.size * 3.2]} />
+      <ambientLight intensity={0.45} />
+      <pointLight position={[cam.target[0] + cam.size * 0.4, cam.target[1] + cam.size * 0.5, cam.target[2] + cam.size * 0.3]} intensity={1.6} color="#b6ff4a" />
+      <pointLight position={[cam.target[0] - cam.size * 0.3, cam.target[1], cam.target[2]]} intensity={0.8} color="#67f0c8" />
       {scene.cloud.length ? <Cloud points={scene.cloud} origin={origin} /> : null}
       {lesson.length > 1 ? <PathLine points={lesson} color="#67f0c8" dashed /> : null}
       {attempt.length > 1 ? <PathLine points={attempt} color="#b6ff4a" /> : null}
@@ -197,16 +239,18 @@ function SceneBody({ scene, interactive }: { scene: DailyScene; interactive: boo
         nodes={scene.lesson}
         origin={origin}
         color="#67f0c8"
+        radius={cam.hopR}
         onPick={interactive ? (id) => router.push(`/neuron/${id}`) : undefined}
       />
       <HopMarks
         nodes={scene.attempt}
         origin={origin}
         color="#b6ff4a"
+        radius={cam.hopR}
         onPick={interactive ? (id) => router.push(`/neuron/${id}`) : undefined}
       />
-      {attempt.length ? <Traveler points={attempt} /> : null}
-      <OrbitControls enablePan enableZoom enableRotate zoomSpeed={0.7} target={cam.target} />
+      {attempt.length ? <Traveler points={attempt} scale={cam.flyScale} /> : null}
+      {attempt.length > 1 ? <FollowCam points={attempt} size={cam.size} /> : null}
     </>
   );
 }

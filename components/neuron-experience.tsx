@@ -25,7 +25,8 @@ export function NeuronExperience({ rootId }: { rootId: string }) {
   });
   const morph = useQuery({
     queryKey: ["morph", rootId],
-    queryFn: () => fetch(`/api/neuron/${rootId}/morphology`).then((r) => r.json() as Promise<Morphology>),
+    queryFn: () =>
+      fetch(`/api/neuron/${rootId}/morphology`).then((r) => r.json() as Promise<Morphology & { error?: string }>),
   });
   const live = useQuery({
     queryKey: ["live", rootId],

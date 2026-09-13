@@ -262,12 +262,14 @@ export class McnsProvider implements ConnectomeProvider {
     await ensureMetadata();
     const db = getSqlite();
     return REGION_GUIDES.map((guide) => {
-      const column =
-        guide.column === "superClass"
-          ? "super_class"
-          : guide.column === "cellClass"
-            ? "cell_class"
-            : String(guide.column);
+      const columns: Record<string, string> = {
+        superClass: "super_class",
+        cellClass: "cell_class",
+        flow: "flow",
+        region: "region",
+        dimorphism: "dimorphism",
+      };
+      const column = columns[guide.column] ?? String(guide.column);
       if (!["super_class", "cell_class", "flow", "region", "dimorphism"].includes(column)) {
         throw new Error(`Unsupported region column ${column}`);
       }

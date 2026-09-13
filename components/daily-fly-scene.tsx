@@ -1,6 +1,6 @@
 "use client";
 
-import { OrbitControls } from "@react-three/drei";
+import { Line, OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef } from "react";
@@ -43,20 +43,17 @@ function Cloud({ points, origin }: { points: DailyScene["cloud"]; origin: THREE.
 }
 
 function PathLine({ points, color, dashed }: { points: THREE.Vector3[]; color: string; dashed?: boolean }) {
-  const geom = useMemo(() => {
-    const g = new THREE.BufferGeometry().setFromPoints(points);
-    if (dashed) g.computeLineDistances();
-    return g;
-  }, [dashed, points]);
-
   return (
-    <line geometry={geom}>
-      {dashed ? (
-        <lineDashedMaterial color={color} dashSize={2.2} gapSize={1.4} transparent opacity={0.45} />
-      ) : (
-        <lineBasicMaterial color={color} transparent opacity={0.95} />
-      )}
-    </line>
+    <Line
+      points={points}
+      color={color}
+      dashed={Boolean(dashed)}
+      dashSize={2.2}
+      gapSize={1.4}
+      transparent
+      opacity={dashed ? 0.45 : 0.95}
+      lineWidth={1.6}
+    />
   );
 }
 

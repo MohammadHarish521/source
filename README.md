@@ -35,6 +35,8 @@ The Cell paper reports ~166,700 proofread neurons. FLY indexes the public annota
 
 Gameplay treats a directed pair as connected at **5+ synapses**.
 
+`/today` flies a Three.js model along that day’s walk. Hop coordinates are real somas from Male CNS v1.0. The fly mesh is a model. Extra path weights are labeled **TRAINING**.
+
 ## Integrity labels
 
 - **DATA** — fields from the official release
@@ -44,6 +46,12 @@ Gameplay treats a directed pair as connected at **5+ synapses**.
 - **USER** — claims, profiles, activity
 
 A claimed neuron is a profile slot inside this app. It is not ownership of scientific data or biological material.
+
+## Deploy
+
+`.cache/` is gitignored and holds the SQLite graph plus official feathers (~500 MB+). Serverless hosts without a persistent disk (typical Vercel) will not have that data and cannot finish first-boot ingest in time.
+
+Ship to a host with a volume (Fly.io, Railway, a VPS). Copy `.cache/fly-mcns-v1.db` onto that volume, set `NEUPRINT_TOKEN`, then run `npm run train` once so today’s walk exists before traffic hits `/`.
 
 ## Cite
 

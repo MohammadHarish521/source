@@ -3,9 +3,11 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { BrainScene } from "./brain-scene";
+import { DailyFlyScene } from "./daily-fly-scene";
 import { LabelChip } from "./label-chip";
 import { formatNumber } from "@/lib/utils";
 import type { CloudPoint, DatasetInfo, RankedNeuron } from "@/lib/connectome/types";
+import type { DailyRun, DailyScene } from "@/lib/fly/daily";
 
 export function HomeExperience() {
   const dataset = useQuery({
@@ -13,10 +15,16 @@ export function HomeExperience() {
     queryFn: () => fetch("/api/dataset").then((r) => r.json() as Promise<DatasetInfo>),
     refetchInterval: 4000,
   });
+  const today = useQuery({
+    queryKey: ["today-run"],
+    queryFn: () =>
+      fetch("/api/today").then((r) => r.json() as Promise<{ run?: DailyRun; scene?: DailyScene }>),
+    enabled: Boolean(dataset.data?.ready.graph),
+  });
   const cloud = useQuery({
     queryKey: ["cloud"],
     queryFn: () => fetch("/api/brain/cloud").then((r) => r.json() as Promise<{ points: CloudPoint[] }>),
-    enabled: Boolean(dataset.data?.ready.metadata),
+    enabled: Boolean(dataset.data?.ready.metadata) && !today.data?.scene?.attempt.length,
   });
   const board = useQuery({
     queryKey: ["board", "most-connected"],
@@ -36,12 +44,16 @@ export function HomeExperience() {
 
   const info = dataset.data;
   const points = cloud.data?.points ?? [];
+  const scene = today.data?.scene;
+  const run = today.data?.run;
 
   return (
     <main>
       <section className="relative min-h-[92vh] overflow-hidden">
         <div className="absolute inset-0">
-          {points.length ? (
+          {scene && (scene.attempt.length || scene.cloud.length) ? (
+            <DailyFlyScene scene={scene} compact />
+          ) : points.length ? (
             <BrainScene points={points} />
           ) : (
             <div className="grid h-full place-items-center text-[var(--muted)]">
@@ -64,14 +76,14 @@ export function HomeExperience() {
             Find yours.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/explore" className="border border-[var(--accent)] bg-[var(--accent)] px-5 py-3 font-medium text-[#070708]">
+            <Link href="/today" className="border border-[var(--accent)] bg-[var(--accent)] px-5 py-3 font-medium text-[#070708]">
+              WATCH TODAY
+            </Link>
+            <Link href="/explore" className="border border-[var(--paper)] px-5 py-3">
               ENTER THE BRAIN
             </Link>
-            <Link href="/find" className="border border-[var(--paper)] px-5 py-3">
+            <Link href="/find" className="border border-[var(--line)] px-5 py-3">
               FIND YOUR NEURON
-            </Link>
-            <Link href="/neuron/10001" className="border border-[var(--line)] px-5 py-3">
-              OPEN A VERIFIED CELL
             </Link>
           </div>
         </div>
@@ -86,10 +98,14 @@ export function HomeExperience() {
       <section className="mx-auto grid max-w-7xl gap-8 px-5 pb-20 md:grid-cols-2">
         <div className="panel p-6">
           <p className="label">TODAY THE FLY RAN</p>
-          <h2 className="mt-2 text-3xl">A walk on real wiring</h2>
-          <p className="mt-3 text-[var(--muted)]">Official connections. Our extra weights are labeled training.</p>
+          <h2 className="mt-2 text-3xl">{run?.found ? `Reached in ${run.hops}` : "Walking real wiring"}</h2>
+          <p className="mt-3 text-[var(--muted)]">
+            {run
+              ? `${run.start.cellType ?? run.start.rootId} → ${run.target.cellType ?? run.target.rootId}`
+              : "Official connections. Extra weights are labeled training."}
+          </p>
           <Link href="/today" className="mt-6 inline-block border border-[var(--accent)] px-4 py-2 text-[var(--accent)]">
-            SEE TODAY
+            WATCH TODAY
           </Link>
         </div>
         <div className="panel p-6">

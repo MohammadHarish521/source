@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #070708;
+  --bg-2: #0d0d10;
+  --paper: #f3eee4;
+  --muted: #9a9388;
+  --line: rgba(243, 238, 228, 0.12);
+  --accent: #b6ff4a;
+  --accent-2: #67f0c8;
+  --danger: #ff6b4a;
+  --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: "Geist", "Satoshi", "Helvetica Neue", sans-serif;
+}
+
+@layer base {
+  * { box-sizing: border-box; }
+
+html, body {
+  background: var(--bg);
+  color: var(--paper);
+  font-family: var(--font-sans), var(--sans);
+  min-height: 100%;
+  font-feature-settings: "liga" 0, "calt" 0;
+}
+
+  body {
+    background-image:
+      linear-gradient(rgba(243,238,228,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(243,238,228,0.03) 1px, transparent 1px);
+    background-size: 72px 72px;
+  }
+
+  a { color: inherit; text-decoration: none; }
+  button { font: inherit; color: inherit; }
+}
+
+.grid-fade {
+  mask-image: radial-gradient(ellipse at center, #000 40%, transparent 78%);
+}
+
+.glow-line {
+  text-shadow: 0 0 18px rgba(182, 255, 74, 0.35);
+}
+
+.panel {
+  background: rgba(7, 7, 8, 0.72);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(16px);
+}
+
+.scan {
+  position: relative;
+}
+.scan::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 3px,
+    rgba(243, 238, 228, 0.02) 3px 4px
+  );
+}
+
+.label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.share-card {
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(182, 255, 74, 0.08), transparent 46%),
+    rgba(7, 7, 8, 0.9);
+}
+
+.share-card-inner {
+  min-height: 220px;
+}

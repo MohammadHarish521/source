@@ -1,7 +1,7 @@
 import { getDirectedNeighbors, pickConnectedPair, shortestPath } from "@/lib/connectome/graph";
 import { fetchLiveNeuron, fetchLiveTypes, neuprintConfigured } from "@/lib/connectome/neuprint";
 import type { CloudPoint, PathHop } from "@/lib/connectome/types";
-import { getSqlite } from "@/lib/db";
+import { collections } from "@/lib/db";
 import { MIN_SYNAPSES } from "@/lib/connectome/sources";
 
 export type DailyHop = {
@@ -45,25 +45,14 @@ function utcDay(now = new Date()) {
   return now.toISOString().slice(0, 10);
 }
 
-function rowToRun(row: { day: string; payload: string }): DailyRun {
-  return JSON.parse(row.payload) as DailyRun;
+export async function getDailyRun(day = utcDay()): Promise<DailyRun | null> {
+  const { dailyRuns } = await collections();
+  const row = await dailyRuns.findOne({ _id: day });
+  const payload = row && typeof row.payload === "string" ? row.payload : row ? JSON.stringify(row.payload) : null;
+  return payload ? (JSON.parse(payload) as DailyRun) : null;
 }
 
-export function getDailyRun(day = utcDay()): DailyRun | null {
-  const row = getSqlite()
-    .prepare("SELECT day, payload FROM daily_runs WHERE day = ?")
-    .get(day) as { day: string; payload: string } | undefined;
-  return row ? rowToRun(row) : null;
-}
-
-function learnedBonus(pre: string, post: string) {
-  const row = getSqlite()
-    .prepare("SELECT bonus FROM daily_weights WHERE pre = ? AND post = ?")
-    .get(pre, post) as { bonus: number } | undefined;
-  return row?.bonus ?? 0;
-}
-
-function walkWithLearning(start: string, target: string, maxHops = 8) {
+function walkWithLearning(start: string, target: string, bonuses: Map<string, number>, maxHops = 8) {
   const path: Array<{ rootId: string; synapsesFromPrev: number | null }> = [
     { rootId: start, synapsesFromPrev: null },
   ];
@@ -76,7 +65,7 @@ function walkWithLearning(start: string, target: string, maxHops = 8) {
       .filter((edge) => !seen.has(edge.id))
       .map((edge) => ({
         ...edge,
-        score: edge.synapses + learnedBonus(current, edge.id) * 8,
+        score: edge.synapses + (bonuses.get(`${current}\0${edge.id}`) ?? 0) * 8,
       }))
       .sort((a, b) => b.score - a.score);
     const next = scored[0];
@@ -88,42 +77,44 @@ function walkWithLearning(start: string, target: string, maxHops = 8) {
   return { path, found: current === target };
 }
 
-function rememberPath(path: Array<{ rootId: string }>) {
-  const db = getSqlite();
-  const upsert = db.prepare(`
-    INSERT INTO daily_weights (pre, post, bonus, updated_at)
-    VALUES (?, ?, 1, ?)
-    ON CONFLICT(pre, post) DO UPDATE SET bonus = bonus + 1, updated_at = excluded.updated_at
-  `);
+async function rememberPath(path: Array<{ rootId: string }>) {
+  const { dailyWeights } = await collections();
   const now = Date.now();
   let learned = 0;
-  const tx = db.transaction(() => {
-    for (let i = 1; i < path.length; i++) {
-      upsert.run(path[i - 1].rootId, path[i].rootId, now);
-      learned += 1;
-    }
-  });
-  tx();
+  for (let i = 1; i < path.length; i++) {
+    await dailyWeights.updateOne(
+      { pre: path[i - 1].rootId, post: path[i].rootId },
+      { $inc: { bonus: 1 }, $set: { updated_at: now } },
+      { upsert: true },
+    );
+    learned += 1;
+  }
   return learned;
 }
 
 export async function runDailyTrain(day = utcDay()): Promise<DailyRun> {
-  const existing = getDailyRun(day);
+  const existing = await getDailyRun(day);
   if (existing) return existing;
 
   const pair = pickConnectedPair(`train:${day}`, 4);
   if (!pair) {
-    throw new Error("Local Male CNS graph is not ready. Wait for ingest, then retry.");
+    throw new Error("Mongo connectome graph is not loaded. Run npm run push-mongo, then retry.");
+  }
+
+  const { dailyWeights } = await collections();
+  const bonusRows = await dailyWeights.find({}).toArray();
+  const bonuses = new Map<string, number>();
+  for (const row of bonusRows) {
+    bonuses.set(`${String(row.pre)}\0${String(row.post)}`, Number(row.bonus ?? 0));
   }
 
   const shortest = shortestPath(pair.start, pair.target, MIN_SYNAPSES, 8);
-  const walked = walkWithLearning(pair.start, pair.target, 8);
-  const lesson = shortest.found
-    ? rememberPath(shortest.path.map((hop) => ({ rootId: hop.rootId })))
+  const walked = walkWithLearning(pair.start, pair.target, bonuses, 8);
+  const learnedEdges = shortest.found
+    ? await rememberPath(shortest.path.map((hop) => ({ rootId: hop.rootId })))
     : walked.found
-      ? rememberPath(walked.path)
+      ? await rememberPath(walked.path)
       : 0;
-  const learnedEdges = lesson;
 
   const ids = [
     ...new Set([
@@ -143,15 +134,8 @@ export async function runDailyTrain(day = utcDay()): Promise<DailyRun> {
     }
   }
 
-  const db = getSqlite();
-  const typeOf = (id: string) => {
-    const live = liveTypes.get(id);
-    if (live) return live;
-    const row = db.prepare("SELECT cell_type FROM neurons WHERE root_id = ?").get(id) as
-      | { cell_type: string | null }
-      | undefined;
-    return row?.cell_type ?? null;
-  };
+  const { cellTypeOf } = await import("@/lib/connectome/csr");
+  const typeOf = (id: string) => liveTypes.get(id) || cellTypeOf(id);
 
   const hops: DailyHop[] = walked.path.map((step) => ({
     rootId: step.rootId,
@@ -180,20 +164,23 @@ export async function runDailyTrain(day = utcDay()): Promise<DailyRun> {
     path: hops,
     lessonPath: hopsFromShortest(shortest.path, typeOf, liveTypes),
     source: liveOk
-      ? "neuPrint male-cns:v1.0 + local 5+ synapse graph"
-      : "local 5+ synapse graph (neuPrint unavailable for this run)",
+      ? "neuPrint male-cns:v1.0 + Male CNS graph on MongoDB"
+      : "Male CNS graph on MongoDB (neuPrint unavailable for this run)",
   };
 
-  db.prepare("INSERT OR REPLACE INTO daily_runs (day, payload, created_at) VALUES (?, ?, ?)").run(
-    day,
-    JSON.stringify(run),
-    Date.now(),
+  const { dailyRuns } = await collections();
+  await dailyRuns.updateOne(
+    { _id: day },
+    { $set: { day, payload: JSON.stringify(run), created_at: Date.now() } },
+    { upsert: true },
   );
   return run;
 }
 
 export async function ensureDailyRun(day = utcDay()) {
-  return getDailyRun(day) ?? runDailyTrain(day);
+  const { ensureIngest } = await import("@/lib/connectome/ingest");
+  await ensureIngest();
+  return (await getDailyRun(day)) ?? runDailyTrain(day);
 }
 
 function hopsFromShortest(
@@ -209,27 +196,21 @@ function hopsFromShortest(
   }));
 }
 
-function locateNeurons(ids: string[]): DailySceneNode[] {
-  const db = getSqlite();
-  const stmt = db.prepare(`
-    SELECT root_id, cell_type,
-           COALESCE(soma_x, pos_x) AS x,
-           COALESCE(soma_y, pos_y) AS y,
-           COALESCE(soma_z, pos_z) AS z
-    FROM neurons
-    WHERE root_id = ?
-  `);
-
+async function locateNeurons(ids: string[]): Promise<DailySceneNode[]> {
+  const { neurons } = await collections();
+  const rows = await neurons.find({ _id: { $in: ids } }).toArray();
+  const byId = new Map(rows.map((row) => [String(row._id), row]));
   const raw = ids.map((id) => {
-    const row = stmt.get(id) as
-      | { root_id: string; cell_type: string | null; x: number | null; y: number | null; z: number | null }
-      | undefined;
+    const row = byId.get(id);
+    const x = (row?.soma_x ?? row?.pos_x) as number | null | undefined;
+    const y = (row?.soma_y ?? row?.pos_y) as number | null | undefined;
+    const z = (row?.soma_z ?? row?.pos_z) as number | null | undefined;
     return {
       rootId: id,
-      cellType: row?.cell_type ?? null,
-      x: row?.x ?? null,
-      y: row?.y ?? null,
-      z: row?.z ?? null,
+      cellType: typeof row?.cell_type === "string" ? row.cell_type : null,
+      x: x ?? null,
+      y: y ?? null,
+      z: z ?? null,
     };
   });
 
@@ -270,42 +251,45 @@ function lessonHopsFor(run: DailyRun): DailyHop[] {
   }));
 }
 
-function sampleCloud(limit = 4800): CloudPoint[] {
-  const rows = getSqlite()
-    .prepare(
-      `
-      SELECT root_id, COALESCE(soma_x, pos_x) AS x, COALESCE(soma_y, pos_y) AS y,
-             COALESCE(soma_z, pos_z) AS z, super_class, cell_type
-      FROM neurons
-      WHERE COALESCE(soma_x, pos_x) IS NOT NULL
-      ORDER BY COALESCE(partner_count, 0) DESC
-      LIMIT ?
-    `,
-    )
-    .all(limit) as Array<{
-    root_id: string;
-    x: number;
-    y: number;
-    z: number;
-    super_class: string | null;
-    cell_type: string | null;
-  }>;
-  return rows.map((row) => ({
-    rootId: row.root_id,
-    x: row.x,
-    y: row.y,
-    z: row.z,
-    superClass: row.super_class,
-    cellType: row.cell_type,
-  }));
+async function sampleCloud(limit = 2800): Promise<CloudPoint[]> {
+  const { neurons } = await collections();
+  const rows = await neurons
+    .find({ $or: [{ soma_x: { $ne: null } }, { pos_x: { $ne: null } }] })
+    .sort({ partner_count: -1 })
+    .limit(limit)
+    .project({ soma_x: 1, soma_y: 1, soma_z: 1, pos_x: 1, pos_y: 1, pos_z: 1, super_class: 1, cell_type: 1 })
+    .toArray();
+  return rows
+    .map((row) => {
+      const x = (row.soma_x ?? row.pos_x) as number | null;
+      const y = (row.soma_y ?? row.pos_y) as number | null;
+      const z = (row.soma_z ?? row.pos_z) as number | null;
+      if (x == null || y == null || z == null) return null;
+      return {
+        rootId: String(row._id),
+        x,
+        y,
+        z,
+        superClass: typeof row.super_class === "string" ? row.super_class : null,
+        cellType: typeof row.cell_type === "string" ? row.cell_type : null,
+      };
+    })
+    .filter((row): row is CloudPoint => Boolean(row));
 }
 
-export function getDailyScene(run: DailyRun): DailyScene {
-  return {
-    attempt: locateNeurons(run.path.map((hop) => hop.rootId)),
-    lesson: locateNeurons(lessonHopsFor(run).map((hop) => hop.rootId)),
-    cloud: sampleCloud(),
-  };
+export async function getDailyScene(run: DailyRun): Promise<DailyScene> {
+  const lessonHops = lessonHopsFor(run);
+  if (!run.lessonPath?.length && lessonHops.length) {
+    run.lessonPath = lessonHops;
+    const { dailyRuns } = await collections();
+    await dailyRuns.updateOne({ _id: run.day }, { $set: { payload: JSON.stringify(run) } });
+  }
+  const [attempt, lesson, cloud] = await Promise.all([
+    locateNeurons(run.path.map((hop) => hop.rootId)),
+    locateNeurons(lessonHops.map((hop) => hop.rootId)),
+    sampleCloud(2800),
+  ]);
+  return { attempt, lesson, cloud };
 }
 
 export async function probeNeuprint() {

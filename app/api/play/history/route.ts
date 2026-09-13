@@ -1,19 +1,17 @@
 import { getOrCreateUser } from "@/lib/session";
-import { getSqlite } from "@/lib/db";
+import { collections } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const user = await getOrCreateUser();
-  const rows = getSqlite()
-    .prepare(
-      `SELECT day, moves, completed, path, created_at
-       FROM puzzle_plays
-       WHERE user_id = ?
-       ORDER BY created_at DESC
-       LIMIT 21`,
-    )
-    .all(user.id);
+  const { puzzlePlays } = await collections();
+  const rows = await puzzlePlays
+    .find({ user_id: user.id })
+    .sort({ created_at: -1 })
+    .limit(21)
+    .project({ day: 1, moves: 1, completed: 1, path: 1, created_at: 1 })
+    .toArray();
   return Response.json({
     streak: user.streak,
     best: user.best_six_degrees,

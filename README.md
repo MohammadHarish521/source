@@ -13,14 +13,17 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-On first boot the server downloads official public files into `.cache/`:
+The app reads the connectome from **MongoDB Atlas** (free M0 is enough). The 6.2M-edge graph is stored as one gzipped binary, not 6 million documents.
 
-1. Male CNS v1.0 body annotations (~14 MB feather)
-2. Neurotransmitter predictions (~41 MB feather)
-3. Traced-only connectome weights (~508 MB feather) — compact graph only, not EM imagery
-4. Individual neuron SWC skeletons on demand from Janelia GCS
+```sh
+# one-time, from a machine that still has .cache/fly-mcns-v1.db
+# 1. Create a free Atlas cluster, allow 0.0.0.0/0, copy the URI into .env
+# 2. Push the local index
+npm run push-mongo
+npm run train
+```
 
-Metadata arrives first, so you can open real neurons and skeletons before the full graph index finishes.
+Skeletons still come from Janelia GCS on demand.
 
 ## What is indexed
 
@@ -49,9 +52,7 @@ A claimed neuron is a profile slot inside this app. It is not ownership of scien
 
 ## Deploy
 
-`.cache/` is gitignored and holds the SQLite graph plus official feathers (~500 MB+). Serverless hosts without a persistent disk (typical Vercel) will not have that data and cannot finish first-boot ingest in time.
-
-Ship to a host with a volume (Fly.io, Railway, a VPS). Copy `.cache/fly-mcns-v1.db` onto that volume, set `NEUPRINT_TOKEN`, then run `npm run train` once so today’s walk exists before traffic hits `/`.
+Vercel (or any serverless host) works. Set `MONGODB_URI` and `NEUPRINT_TOKEN` in the host env. Run `npm run push-mongo` once from this laptop before you deploy. Do not commit `.env`.
 
 ## Cite
 

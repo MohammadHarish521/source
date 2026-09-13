@@ -1,10 +1,9 @@
-import { getSqlite } from "@/lib/db";
+import { collections } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const rows = getSqlite()
-    .prepare("SELECT * FROM activity ORDER BY created_at DESC LIMIT 30")
-    .all();
+  const { activity } = await collections();
+  const rows = await activity.find({}).sort({ created_at: -1 }).limit(30).toArray();
   return Response.json({ activity: rows });
 }

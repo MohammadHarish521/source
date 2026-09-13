@@ -10,8 +10,8 @@ export async function GET(req: Request) {
   const result = await connectome.getShortestPath(a, b);
   if (result.found) {
     const user = await getOrCreateUser();
-    trackEvent("path_found");
-    addActivity("path", `Someone found a ${result.hops} hop connection`, a, String(user.id));
+    await trackEvent("path_found");
+    await addActivity("path", `Someone found a ${result.hops} hop connection`, a, String(user.id));
   }
   return Response.json(result);
 }

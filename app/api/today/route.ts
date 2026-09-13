@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const [run, probe] = await Promise.all([ensureDailyRun(), probeNeuprint()]);
-    return Response.json({ run, scene: getDailyScene(run), probe });
+    return Response.json({ run, scene: await getDailyScene(run), probe });
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : "Daily train failed." },

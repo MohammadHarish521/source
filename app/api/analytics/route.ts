@@ -15,6 +15,6 @@ export async function POST(req: Request) {
     "claim",
     "daily_move",
   ]);
-  if (event && allowed.has(event)) trackEvent(event);
+  if (event && allowed.has(event)) await trackEvent(event);
   return Response.json({ ok: true });
 }

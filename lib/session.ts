@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { getSqlite } from "./db";
+import { asUser, collections } from "./db";
 
 const COOKIE = "fly_id";
 
@@ -10,32 +10,47 @@ function handleFromId(id: string) {
 export async function getOrCreateUser() {
   const jar = await cookies();
   let id = jar.get(COOKIE)?.value;
-  const db = getSqlite();
+  const { users } = await collections();
   if (!id) {
     id = crypto.randomUUID();
     jar.set(COOKIE, id, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 400 });
   }
-  const existing = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as Record<string, unknown> | undefined;
-  if (existing) return existing;
+  const existing = await users.findOne({ _id: id });
+  if (existing) return asUser(existing)!;
   const now = Date.now();
-  db.prepare("INSERT INTO users (id, handle, created_at) VALUES (?, ?, ?)").run(id, handleFromId(id), now);
-  return db.prepare("SELECT * FROM users WHERE id = ?").get(id) as Record<string, unknown>;
+  const doc = {
+    _id: id,
+    handle: handleFromId(id),
+    neuron_id: null,
+    created_at: now,
+    credits: 3,
+    streak: 0,
+    last_puzzle_day: null,
+    favorite_region: null,
+    neurons_discovered: 0,
+    connections_explored: 0,
+    best_six_degrees: null,
+  };
+  await users.updateOne({ _id: id }, { $setOnInsert: doc }, { upsert: true });
+  const created = await users.findOne({ _id: id });
+  return asUser(created)!;
 }
 
-export function trackEvent(event: string) {
+export async function trackEvent(event: string) {
   const day = new Date().toISOString().slice(0, 10);
-  const db = getSqlite();
-  const row = db.prepare("SELECT id, count FROM analytics WHERE event = ? AND day = ?").get(event, day) as
-    | { id: number; count: number }
-    | undefined;
-  if (row) db.prepare("UPDATE analytics SET count = count + 1 WHERE id = ?").run(row.id);
-  else db.prepare("INSERT INTO analytics (event, day, count) VALUES (?, ?, 1)").run(event, day);
+  const { analytics } = await collections();
+  await analytics.updateOne({ event, day }, { $inc: { count: 1 }, $setOnInsert: { event, day } }, { upsert: true });
 }
 
-export function addActivity(kind: string, message: string, rootId?: string, userId?: string) {
-  getSqlite()
-    .prepare("INSERT INTO activity (kind, message, root_id, user_id, created_at) VALUES (?, ?, ?, ?, ?)")
-    .run(kind, message, rootId ?? null, userId ?? null, Date.now());
+export async function addActivity(kind: string, message: string, rootId?: string, userId?: string) {
+  const { activity } = await collections();
+  await activity.insertOne({
+    kind,
+    message,
+    root_id: rootId ?? null,
+    user_id: userId ?? null,
+    created_at: Date.now(),
+  });
 }
 
 export function todayKey() {

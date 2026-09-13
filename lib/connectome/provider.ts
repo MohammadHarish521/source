@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { DATA_DIR, getSqlite } from "@/lib/db";
+import { DATA_DIR, collections } from "@/lib/db";
+import { csr } from "./csr";
 import { ARCHETYPE_TITLES, archetypeFor, defaultStats } from "./archetypes";
 import { getDirectedNeighbors, getNeighbors, pickConnectedPair, removalExperiment, shortestPath } from "./graph";
 import { ensureIngest, ensureMetadata, getIngestStatus } from "./ingest";
@@ -21,8 +22,9 @@ import type {
   SearchHit,
 } from "./types";
 
-function rowToNeuron(row: Record<string, unknown> | undefined): NeuronRecord | null {
+function rowToNeuron(row: Record<string, unknown> | undefined | null): NeuronRecord | null {
   if (!row) return null;
+  if (row.root_id == null && row._id != null) row = { ...row, root_id: row._id };
   const num = (key: string) => {
     const value = row[key];
     return typeof value === "number" ? value : value == null ? null : Number(value);
@@ -95,8 +97,12 @@ async function fetchMorphology(rootId: string): Promise<Morphology> {
     });
     if (swcRes.ok) {
       const text = await swcRes.text();
-      fs.mkdirSync(path.dirname(swcFile), { recursive: true });
-      fs.writeFileSync(swcFile, text);
+      try {
+        fs.mkdirSync(path.dirname(swcFile), { recursive: true });
+        fs.writeFileSync(swcFile, text);
+      } catch {
+        /* ephemeral hosts have no disk */
+      }
       morph = parseSwcSkeleton(text, rootId);
     } else {
       const binRes = await fetch(`${REMOTE.skeletonsPrecomputed}/${rootId}`, {
@@ -108,17 +114,20 @@ async function fetchMorphology(rootId: string): Promise<Morphology> {
         );
       }
       const buffer = await binRes.arrayBuffer();
-      fs.mkdirSync(path.dirname(binFile), { recursive: true });
-      fs.writeFileSync(binFile, Buffer.from(buffer));
+      try {
+        fs.mkdirSync(path.dirname(binFile), { recursive: true });
+        fs.writeFileSync(binFile, Buffer.from(buffer));
+      } catch {
+        /* ephemeral hosts have no disk */
+      }
       morph = parseNeuroglancerSkeleton(buffer, rootId);
     }
   }
   morph = downsampleMorphology(morph);
-  const db = getSqlite();
-  db.prepare("UPDATE neurons SET cable_length_nm = ?, skeleton_nodes = ? WHERE root_id = ?").run(
-    morph.cableLengthNm,
-    morph.nodeCount,
-    rootId,
+  const { neurons } = await collections();
+  await neurons.updateOne(
+    { _id: rootId },
+    { $set: { cable_length_nm: morph.cableLengthNm, skeleton_nodes: morph.nodeCount } },
   );
   morphologyCache.set(rootId, morph);
   return morph;
@@ -126,8 +135,9 @@ async function fetchMorphology(rootId: string): Promise<Morphology> {
 
 export class McnsProvider implements ConnectomeProvider {
   async getDatasetInfo(): Promise<DatasetInfo> {
-    const ingest = getIngestStatus();
-    void ensureIngest();
+    const { refreshIngestStatus } = await import("./ingest");
+    const ingest = await refreshIngestStatus();
+    void ensureIngest().catch(() => undefined);
     return {
       id: DATASET.id,
       name: `${DATASET.name} ${DATASET.version}`,
@@ -157,35 +167,35 @@ export class McnsProvider implements ConnectomeProvider {
 
   async getNeuron(id: string): Promise<NeuronRecord | null> {
     await ensureMetadata();
-    const row = getSqlite().prepare("SELECT * FROM neurons WHERE root_id = ?").get(id) as
-      | Record<string, unknown>
-      | undefined;
+    const { neurons } = await collections();
+    const row = await neurons.findOne({ _id: id });
     return rowToNeuron(row);
   }
 
   async getNeuronPartners(id: string, limit = 24): Promise<Partners> {
     await ensureIngest();
     const { upstream, downstream } = getDirectedNeighbors(id);
-    const db = getSqlite();
-    const lookup = db.prepare("SELECT root_id, cell_type, super_class, side FROM neurons WHERE root_id = ?");
-    const decorate = (direction: "upstream" | "downstream", list: Array<{ id: string; synapses: number }>) =>
-      list.slice(0, limit).map((edge) => {
-        const meta = lookup.get(edge.id) as
-          | { root_id: string; cell_type: string | null; super_class: string | null; side: string | null }
-          | undefined;
+    const { neurons } = await collections();
+    const decorate = async (direction: "upstream" | "downstream", list: Array<{ id: string; synapses: number }>) => {
+      const slice = list.slice(0, limit);
+      const rows = await neurons.find({ _id: { $in: slice.map((e) => e.id) } }).toArray();
+      const byId = new Map(rows.map((row) => [String(row._id), row]));
+      return slice.map((edge) => {
+        const meta = byId.get(edge.id);
         return {
           rootId: edge.id,
           direction,
           synapses: edge.synapses,
-          cellType: meta?.cell_type ?? null,
-          superClass: meta?.super_class ?? null,
-          side: meta?.side ?? null,
+          cellType: typeof meta?.cell_type === "string" ? meta.cell_type : null,
+          superClass: typeof meta?.super_class === "string" ? meta.super_class : null,
+          side: typeof meta?.side === "string" ? meta.side : null,
         };
       });
+    };
     return {
       minSynapses: MIN_SYNAPSES,
-      upstream: decorate("upstream", upstream),
-      downstream: decorate("downstream", downstream),
+      upstream: await decorate("upstream", upstream),
+      downstream: await decorate("downstream", downstream),
       inputSynapses: upstream.reduce((sum, e) => sum + e.synapses, 0),
       outputSynapses: downstream.reduce((sum, e) => sum + e.synapses, 0),
       inputPartners: upstream.length,
@@ -201,12 +211,10 @@ export class McnsProvider implements ConnectomeProvider {
     await ensureMetadata();
     const q = query.trim();
     if (!q) return [];
-    const db = getSqlite();
+    const { neurons } = await collections();
     if (/^\d{4,}$/.test(q)) {
-      const exact = db.prepare("SELECT * FROM neurons WHERE root_id = ?").get(q) as Record<string, unknown> | undefined;
-      const like = db
-        .prepare("SELECT * FROM neurons WHERE root_id LIKE ? LIMIT ?")
-        .all(`%${q}%`, limit) as Array<Record<string, unknown>>;
+      const exact = await neurons.findOne({ _id: q });
+      const like = await neurons.find({ _id: { $regex: q } }).limit(limit).toArray();
       return [exact, ...like]
         .filter(Boolean)
         .slice(0, limit)
@@ -225,20 +233,29 @@ export class McnsProvider implements ConnectomeProvider {
         });
     }
     const archetypeHit = ARCHETYPE_TITLES.find((title) => title.toLowerCase().includes(q.toLowerCase()));
-    const term = `%${q.replaceAll("%", "")}%`;
-    const rows = db
-      .prepare(
-        `
-        SELECT * FROM neurons
-        WHERE cell_type LIKE ? OR super_class LIKE ? OR cell_class LIKE ?
-           OR cell_sub_class LIKE ? OR flow LIKE ? OR side LIKE ?
-           OR neurotransmitter LIKE ? OR region LIKE ? OR synonyms LIKE ?
-           OR hemilineage LIKE ? OR nerve LIKE ? OR dimorphism LIKE ? OR fru_dsx LIKE ?
-        ORDER BY partner_count DESC
-        LIMIT ?
-      `,
-      )
-      .all(term, term, term, term, term, term, term, term, term, term, term, term, term, limit) as Array<Record<string, unknown>>;
+    const safe = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const rx = new RegExp(safe, "i");
+    const rows = await neurons
+      .find({
+        $or: [
+          { cell_type: rx },
+          { super_class: rx },
+          { cell_class: rx },
+          { cell_sub_class: rx },
+          { flow: rx },
+          { side: rx },
+          { neurotransmitter: rx },
+          { region: rx },
+          { synonyms: rx },
+          { hemilineage: rx },
+          { nerve: rx },
+          { dimorphism: rx },
+          { fru_dsx: rx },
+        ],
+      })
+      .sort({ partner_count: -1 })
+      .limit(limit)
+      .toArray();
     const hits = rows.map((row) => {
       const neuron = rowToNeuron(row)!;
       return {
@@ -260,8 +277,10 @@ export class McnsProvider implements ConnectomeProvider {
 
   async listRegions(): Promise<RegionRecord[]> {
     await ensureMetadata();
-    const db = getSqlite();
-    return REGION_GUIDES.map((guide) => {
+    const { neurons, claims } = await collections();
+    const claimedIds = (await claims.find({}, { projection: { root_id: 1 } }).toArray()).map((c) => String(c.root_id));
+    return Promise.all(
+      REGION_GUIDES.map(async (guide) => {
       const columns: Record<string, string> = {
         superClass: "super_class",
         cellClass: "cell_class",
@@ -273,16 +292,10 @@ export class McnsProvider implements ConnectomeProvider {
       if (!["super_class", "cell_class", "flow", "region", "dimorphism"].includes(column)) {
         throw new Error(`Unsupported region column ${column}`);
       }
-      const neuronCount = (
-        db.prepare(`SELECT COUNT(*) AS n FROM neurons WHERE ${column} = ?`).get(guide.value) as { n: number }
-      ).n;
-      const claimedCount = (
-        db
-          .prepare(
-            `SELECT COUNT(*) AS n FROM claims c JOIN neurons n ON n.root_id = c.root_id WHERE n.${column} = ?`,
-          )
-          .get(guide.value) as { n: number }
-      ).n;
+      const neuronCount = await neurons.countDocuments({ [column]: guide.value });
+      const claimedCount = claimedIds.length
+        ? await neurons.countDocuments({ [column]: guide.value, _id: { $in: claimedIds } })
+        : 0;
       return {
         slug: guide.slug,
         name: guide.name,
@@ -293,7 +306,8 @@ export class McnsProvider implements ConnectomeProvider {
         neuronCount,
         claimedCount,
       };
-    });
+    }),
+    );
   }
 
   async getRegion(slug: string): Promise<RegionRecord | null> {
@@ -308,74 +322,54 @@ export class McnsProvider implements ConnectomeProvider {
 
   async getBrainCloud(limit = 22000): Promise<CloudPoint[]> {
     await ensureMetadata();
-    const rows = getSqlite()
-      .prepare(
-        `
-        SELECT root_id, COALESCE(soma_x, pos_x) AS x, COALESCE(soma_y, pos_y) AS y,
-               COALESCE(soma_z, pos_z) AS z, super_class, cell_type, partner_count
-        FROM neurons
-        WHERE COALESCE(soma_x, pos_x) IS NOT NULL
-        ORDER BY COALESCE(partner_count, 0) DESC
-        LIMIT ?
-      `,
-      )
-      .all(limit) as Array<{
-      root_id: string;
-      x: number;
-      y: number;
-      z: number;
-      super_class: string | null;
-      cell_type: string | null;
-    }>;
-    return rows.map((row) => ({
-      rootId: row.root_id,
-      x: row.x,
-      y: row.y,
-      z: row.z,
-      superClass: row.super_class,
-      cellType: row.cell_type,
-    }));
+    const { neurons } = await collections();
+    const rows = await neurons
+      .find({ $or: [{ soma_x: { $ne: null } }, { pos_x: { $ne: null } }] })
+      .sort({ partner_count: -1 })
+      .limit(limit)
+      .project({ root_id: 1, soma_x: 1, soma_y: 1, soma_z: 1, pos_x: 1, pos_y: 1, pos_z: 1, super_class: 1, cell_type: 1 })
+      .toArray();
+    return rows
+      .map((row) => {
+        const x = (row.soma_x ?? row.pos_x) as number | null;
+        const y = (row.soma_y ?? row.pos_y) as number | null;
+        const z = (row.soma_z ?? row.pos_z) as number | null;
+        if (x == null || y == null || z == null) return null;
+        return {
+          rootId: String(row.root_id ?? row._id),
+          x,
+          y,
+          z,
+          superClass: typeof row.super_class === "string" ? row.super_class : null,
+          cellType: typeof row.cell_type === "string" ? row.cell_type : null,
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => Boolean(row));
   }
 
   async getLeaderboard(kind: LeaderboardKind, limit = 25): Promise<RankedNeuron[]> {
     await ensureIngest();
-    const db = getSqlite();
-    const maps: Record<LeaderboardKind, { sql: string; label: string }> = {
-      "most-connected": {
-        sql: "SELECT * FROM neurons WHERE partner_count IS NOT NULL ORDER BY partner_count DESC LIMIT ?",
-        label: "unique partners",
-      },
-      "most-inputs": {
-        sql: "SELECT * FROM neurons WHERE input_partners IS NOT NULL ORDER BY input_partners DESC LIMIT ?",
-        label: "upstream partners",
-      },
-      "most-outputs": {
-        sql: "SELECT * FROM neurons WHERE output_partners IS NOT NULL ORDER BY output_partners DESC LIMIT ?",
-        label: "downstream partners",
-      },
+    const { neurons } = await collections();
+    const maps: Record<LeaderboardKind, { sort: Record<string, 1 | -1>; filter: Record<string, unknown>; label: string }> = {
+      "most-connected": { sort: { partner_count: -1 }, filter: { partner_count: { $ne: null } }, label: "unique partners" },
+      "most-inputs": { sort: { input_partners: -1 }, filter: { input_partners: { $ne: null } }, label: "upstream partners" },
+      "most-outputs": { sort: { output_partners: -1 }, filter: { output_partners: { $ne: null } }, label: "downstream partners" },
       "biggest-broadcasters": {
-        sql: "SELECT * FROM neurons WHERE output_partners > 0 AND input_partners > 0 ORDER BY CAST(output_partners AS REAL) / input_partners DESC, output_partners DESC LIMIT ?",
+        sort: { output_partners: -1 },
+        filter: { output_partners: { $gt: 0 }, input_partners: { $gt: 0 } },
         label: "output / input partners",
       },
       "biggest-listeners": {
-        sql: "SELECT * FROM neurons WHERE output_partners > 0 AND input_partners > 0 ORDER BY CAST(input_partners AS REAL) / output_partners DESC, input_partners DESC LIMIT ?",
+        sort: { input_partners: -1 },
+        filter: { output_partners: { $gt: 0 }, input_partners: { $gt: 0 } },
         label: "input / output partners",
       },
-      "most-isolated": {
-        sql: "SELECT * FROM neurons WHERE partner_count IS NOT NULL ORDER BY partner_count ASC, root_id LIMIT ?",
-        label: "unique partners",
-      },
-      largest: {
-        sql: "SELECT * FROM neurons WHERE cable_length_nm IS NOT NULL ORDER BY cable_length_nm DESC LIMIT ?",
-        label: "skeleton cable (nm)",
-      },
-      bridge: {
-        sql: "SELECT * FROM neurons WHERE partner_count IS NOT NULL ORDER BY partner_count DESC LIMIT ?",
-        label: "hub proxy (partner count)",
-      },
+      "most-isolated": { sort: { partner_count: 1, root_id: 1 }, filter: { partner_count: { $ne: null } }, label: "unique partners" },
+      largest: { sort: { cable_length_nm: -1 }, filter: { cable_length_nm: { $ne: null } }, label: "skeleton cable (nm)" },
+      bridge: { sort: { partner_count: -1 }, filter: { partner_count: { $ne: null } }, label: "hub proxy (partner count)" },
     };
     const spec = maps[kind];
-    const rows = db.prepare(spec.sql).all(limit) as Array<Record<string, unknown>>;
+    const rows = await neurons.find(spec.filter).sort(spec.sort).limit(limit).toArray();
     return rows.map((row, i) => {
       const neuron = rowToNeuron(row)!;
       const value =
@@ -402,16 +396,12 @@ export class McnsProvider implements ConnectomeProvider {
 
   async getNeuronBySeed(seed: string): Promise<NeuronRecord | null> {
     await ensureMetadata();
-    const db = getSqlite();
-    const count = (db.prepare("SELECT COUNT(*) AS n FROM neurons").get() as { n: number }).n;
-    if (!count) return null;
+    const graph = csr();
+    if (!graph.ids.length) return null;
     let hash = 2166136261;
     for (const ch of seed) hash = Math.imul(hash ^ ch.charCodeAt(0), 16777619);
-    const offset = Math.abs(hash) % count;
-    const row = db
-      .prepare("SELECT * FROM neurons ORDER BY root_id LIMIT 1 OFFSET ?")
-      .get(offset) as Record<string, unknown> | undefined;
-    return rowToNeuron(row);
+    const id = graph.ids[Math.abs(hash) % graph.ids.length];
+    return this.getNeuron(id);
   }
 
   async getRandomConnectedPair(seed: string) {

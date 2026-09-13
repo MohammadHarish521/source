@@ -28,7 +28,7 @@ export function getNeuprintConfig() {
   return {
     token,
     server: (process.env.NEUPRINT_SERVER || "https://neuprint.janelia.org").replace(/\/$/, ""),
-    dataset: process.env.NEUPRINT_DATASET || "male-cns:v1.0",
+    dataset: (process.env.NEUPRINT_DATASET || "male-cns:v1.0").split(/\s|MONGODB_/)[0] || "male-cns:v1.0",
     configured: token.length > 8,
   };
 }

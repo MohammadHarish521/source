@@ -10,3 +10,4 @@ out
 .env.local
 .DS_Store
 dist
+*.tsbuildinfo

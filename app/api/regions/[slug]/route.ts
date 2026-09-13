@@ -1,5 +1,5 @@
 import { connectome } from "@/lib/connectome/provider";
-import { getSqlite } from "@/lib/db";
+import { collections } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -13,18 +13,31 @@ export async function GET(_: Request, { params }: { params: Promise<{ slug: stri
       : region.match.column === "cellClass"
         ? "cell_class"
         : region.match.column;
-  const neurons = getSqlite()
-    .prepare(
-      `SELECT root_id, cell_type, super_class, side, partner_count FROM neurons WHERE ${column} = ? ORDER BY partner_count DESC LIMIT 40`,
-    )
-    .all(region.match.value);
-  const claimed = getSqlite()
-    .prepare(
-      `SELECT c.root_id, u.handle, c.claim_number FROM claims c
-       JOIN neurons n ON n.root_id = c.root_id
-       JOIN users u ON u.id = c.user_id
-       WHERE n.${column} = ? ORDER BY c.id DESC LIMIT 12`,
-    )
-    .all(region.match.value);
-  return Response.json({ region, neurons, claimed });
+  const { neurons, claims, users } = await collections();
+  const neuronRows = await neurons
+    .find({ [column]: region.match.value })
+    .sort({ partner_count: -1 })
+    .limit(40)
+    .project({ root_id: 1, cell_type: 1, super_class: 1, side: 1, partner_count: 1 })
+    .toArray();
+  const claimRows = await claims.find({}).sort({ created_at: -1 }).limit(80).toArray();
+  const claimed = [];
+  for (const claim of claimRows) {
+    const neuron = await neurons.findOne({ _id: String(claim.root_id), [column]: region.match.value });
+    if (!neuron) continue;
+    const user = await users.findOne({ _id: String(claim.user_id) });
+    claimed.push({ root_id: claim.root_id, handle: user?.handle, claim_number: claim.claim_number });
+    if (claimed.length >= 12) break;
+  }
+  return Response.json({
+    region,
+    neurons: neuronRows.map((row) => ({
+      root_id: row.root_id ?? row._id,
+      cell_type: row.cell_type,
+      super_class: row.super_class,
+      side: row.side,
+      partner_count: row.partner_count,
+    })),
+    claimed,
+  });
 }

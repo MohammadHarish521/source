@@ -1,46 +1,44 @@
 import { connectome } from "@/lib/connectome/provider";
 import { getOrCreateUser, todayKey } from "@/lib/session";
-import { getSqlite } from "@/lib/db";
+import { collections } from "@/lib/db";
 import { hashDayNumber } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const day = todayKey();
-  const db = getSqlite();
-  let puzzle = db.prepare("SELECT * FROM daily_puzzles WHERE day = ?").get(day) as
-    | {
-        day: string;
-        start_id: string;
-        target_id: string;
-        shortest: number;
-        players: number;
-        completions: number;
-        move_sum: number;
-      }
-    | undefined;
+  const { dailyPuzzles, puzzlePlays } = await collections();
+  let puzzle = await dailyPuzzles.findOne({ _id: day });
   if (!puzzle) {
     const pair = await connectome.getRandomConnectedPair(day);
     if (!pair) return Response.json({ error: "Graph index is still building." }, { status: 503 });
-    db.prepare("INSERT INTO daily_puzzles (day, start_id, target_id, shortest) VALUES (?, ?, ?, ?)").run(
-      day,
-      pair.start,
-      pair.target,
-      pair.shortest,
+    await dailyPuzzles.updateOne(
+      { _id: day },
+      {
+        $setOnInsert: {
+          day,
+          start_id: pair.start,
+          target_id: pair.target,
+          shortest: pair.shortest,
+          players: 0,
+          completions: 0,
+          move_sum: 0,
+        },
+      },
+      { upsert: true },
     );
-    puzzle = db.prepare("SELECT * FROM daily_puzzles WHERE day = ?").get(day) as typeof puzzle;
+    puzzle = await dailyPuzzles.findOne({ _id: day });
   }
   const user = await getOrCreateUser();
-  const play = db
-    .prepare("SELECT * FROM puzzle_plays WHERE day = ? AND user_id = ? ORDER BY id DESC LIMIT 1")
-    .get(day, user.id) as { completed: number; moves: number | null; path: string | null } | undefined;
-  const history = db
-    .prepare(
-      "SELECT day, moves, completed FROM puzzle_plays WHERE user_id = ? ORDER BY created_at DESC LIMIT 14",
-    )
-    .all(user.id);
-  const start = await connectome.getNeuron(puzzle!.start_id);
-  const target = await connectome.getNeuron(puzzle!.target_id);
+  const play = await puzzlePlays.find({ day, user_id: user.id }).sort({ created_at: -1 }).limit(1).next();
+  const history = await puzzlePlays
+    .find({ user_id: user.id })
+    .sort({ created_at: -1 })
+    .limit(14)
+    .project({ day: 1, moves: 1, completed: 1 })
+    .toArray();
+  const start = await connectome.getNeuron(String(puzzle!.start_id));
+  const target = await connectome.getNeuron(String(puzzle!.target_id));
   return Response.json({
     number: hashDayNumber(day),
     day,
@@ -51,8 +49,8 @@ export async function GET() {
     stats: {
       players: puzzle!.players,
       completions: puzzle!.completions,
-      averageMoves: puzzle!.completions ? puzzle!.move_sum / puzzle!.completions : null,
-      completionRate: puzzle!.players ? puzzle!.completions / puzzle!.players : null,
+      averageMoves: puzzle!.completions ? Number(puzzle!.move_sum) / Number(puzzle!.completions) : null,
+      completionRate: puzzle!.players ? Number(puzzle!.completions) / Number(puzzle!.players) : null,
     },
     user: {
       handle: user.handle,

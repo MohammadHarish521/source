@@ -1,18 +1,16 @@
-import { getSqlite } from "@/lib/db";
+import { asUser, collections } from "@/lib/db";
 import { connectome } from "@/lib/connectome/provider";
 import Link from "next/link";
 import { formatNumber, shortId } from "@/lib/utils";
 
 export default async function ProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const user = getSqlite().prepare("SELECT * FROM users WHERE id = ? OR handle = ?").get(id, id) as
-    | Record<string, unknown>
-    | undefined;
+  const { users, claims } = await collections();
+  const raw = (await users.findOne({ _id: id })) ?? (await users.findOne({ handle: id }));
+  const user = asUser(raw);
   if (!user) return <main className="px-5 py-16">No public profile yet.</main>;
   const neuron = user.neuron_id ? await connectome.getNeuron(String(user.neuron_id)) : null;
-  const claimed = getSqlite()
-    .prepare("SELECT root_id, claim_number, created_at FROM claims WHERE user_id = ?")
-    .all(user.id) as Array<{ root_id: string; claim_number: number; created_at: number }>;
+  const claimed = await claims.find({ user_id: user.id }).toArray();
   return (
     <main className="mx-auto max-w-3xl px-5 py-12">
       <p className="label">PUBLIC PROFILE</p>
@@ -38,9 +36,9 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
       <h2 className="mt-10 text-2xl">Claimed slots</h2>
       <ul className="mt-4">
         {claimed.map((c) => (
-          <li key={c.root_id} className="border-b border-[var(--line)] py-2">
-            <Link href={`/neuron/${c.root_id}`}>
-              #{c.claim_number} · {shortId(c.root_id)}
+          <li key={String(c.root_id)} className="border-b border-[var(--line)] py-2">
+            <Link href={`/neuron/${String(c.root_id)}`}>
+              #{String(c.claim_number)} · {shortId(String(c.root_id))}
             </Link>
           </li>
         ))}

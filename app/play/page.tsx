@@ -159,7 +159,7 @@ export default function PlayPage() {
             <p className="mb-4 text-sm text-[var(--muted)]">You already connected today. Open the card or try a cleaner path.</p>
           ) : null}
           <button
-            className="border border-[var(--accent)] bg-[var(--accent)] px-6 py-3 font-medium text-[#070708] disabled:opacity-40"
+            className="border border-[var(--accent)] bg-[var(--accent)] px-6 py-3 font-medium text-white disabled:opacity-40"
             disabled={!puzzle?.start?.rootId || start.isPending}
             onClick={() => start.mutate()}
           >

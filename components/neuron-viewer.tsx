@@ -40,11 +40,11 @@ function Skeleton({ morph, partners }: { morph: Morphology; partners?: PartnerEd
   return (
     <group>
       <lineSegments geometry={line}>
-        <lineBasicMaterial color="#b6ff4a" transparent opacity={0.92} />
+        <lineBasicMaterial color="#397519" transparent opacity={0.92} />
       </lineSegments>
       {partners?.length ? (
         <lineSegments geometry={ends}>
-          <lineBasicMaterial color="#67f0c8" transparent opacity={0.35} />
+          <lineBasicMaterial color="#087b60" transparent opacity={0.35} />
         </lineSegments>
       ) : null}
     </group>
@@ -60,8 +60,8 @@ export function NeuronViewer({
 }) {
   return (
     <Canvas camera={{ position: [0, 0, 90], fov: 42 }} className="h-full w-full">
-      <color attach="background" args={["#070708"]} />
-      <fog attach="fog" args={["#070708", 70, 180]} />
+      <color attach="background" args={["#f7f8f4"]} />
+      <fog attach="fog" args={["#f7f8f4", 70, 180]} />
       {morph ? <Skeleton morph={morph} partners={partners} /> : null}
       <OrbitControls enablePan enableZoom enableRotate />
     </Canvas>

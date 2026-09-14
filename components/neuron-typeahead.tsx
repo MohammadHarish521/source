@@ -33,7 +33,7 @@ export function NeuronTypeahead({
         }}
       />
       {open && value.trim().length >= 2 && (results.data?.results ?? []).length > 0 ? (
-        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto border border-[var(--line)] bg-[#070708]">
+        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto border border-[var(--line)] bg-[#f7f8f4]">
           {(results.data.results as Array<{ rootId: string; cellType: string | null }>).slice(0, 8).map((hit) => (
             <li key={hit.rootId}>
               <button

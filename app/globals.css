@@ -1,14 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #070708;
-  --bg-2: #0d0d10;
-  --paper: #f3eee4;
-  --muted: #9a9388;
-  --line: rgba(243, 238, 228, 0.12);
-  --accent: #b6ff4a;
-  --accent-2: #67f0c8;
-  --danger: #ff6b4a;
+  color-scheme: light;
+  --bg: #f7f8f4;
+  --bg-2: #ffffff;
+  --paper: #20271e;
+  --muted: #626b5e;
+  --line: rgba(32, 39, 30, 0.16);
+  --accent: #397519;
+  --accent-2: #087b60;
+  --danger: #c44129;
   --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --sans: "Geist", "Satoshi", "Helvetica Neue", sans-serif;
 }
@@ -26,8 +27,8 @@ html, body {
 
   body {
     background-image:
-      linear-gradient(rgba(243,238,228,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(243,238,228,0.03) 1px, transparent 1px);
+      linear-gradient(rgba(32,39,30,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(32,39,30,0.04) 1px, transparent 1px);
     background-size: 72px 72px;
   }
 
@@ -40,11 +41,11 @@ html, body {
 }
 
 .glow-line {
-  text-shadow: 0 0 18px rgba(182, 255, 74, 0.35);
+  text-shadow: none;
 }
 
 .panel {
-  background: rgba(7, 7, 8, 0.72);
+  background: rgba(255, 255, 255, 0.86);
   border: 1px solid var(--line);
   backdrop-filter: blur(16px);
 }
@@ -60,7 +61,7 @@ html, body {
   background: repeating-linear-gradient(
     to bottom,
     transparent 0 3px,
-    rgba(243, 238, 228, 0.02) 3px 4px
+    rgba(32, 39, 30, 0.015) 3px 4px
   );
 }
 
@@ -80,7 +81,7 @@ html, body {
 .share-card {
   background:
     radial-gradient(ellipse at 20% 0%, rgba(182, 255, 74, 0.08), transparent 46%),
-    rgba(7, 7, 8, 0.9);
+    rgba(255, 255, 255, 0.96);
 }
 
 .share-card-inner {

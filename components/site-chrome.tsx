@@ -25,7 +25,7 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-40 border-b border-[var(--line)] bg-[#070708]/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 border-b border-[var(--line)] bg-[#f7f8f4]/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center gap-6 px-5 py-3">
           <Link href="/" className="flex items-center gap-3">
             <span className="grid h-8 w-8 place-items-center border border-[var(--accent)] text-[var(--accent)]">

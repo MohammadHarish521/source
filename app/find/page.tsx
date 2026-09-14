@@ -35,7 +35,7 @@ export default function FindPage() {
         </p>
         {!neuron ? (
           <button
-            className="mt-8 border border-[var(--accent)] bg-[var(--accent)] px-6 py-3 font-medium text-[#070708]"
+            className="mt-8 border border-[var(--accent)] bg-[var(--accent)] px-6 py-3 font-medium text-white"
             onClick={() => assign.mutate()}
           >
             FIND YOUR NEURON

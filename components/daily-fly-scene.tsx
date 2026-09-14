@@ -92,7 +92,7 @@ function HopMarks({
   );
 }
 
-function FlyMesh() {
+export function FlyMesh() {
   const left = useRef<THREE.Mesh>(null);
   const right = useRef<THREE.Mesh>(null);
 
@@ -106,7 +106,7 @@ function FlyMesh() {
     <group>
       <mesh>
         <sphereGeometry args={[2.1, 16, 16]} />
-        <meshBasicMaterial color="#b6ff4a" transparent opacity={0.16} depthWrite={false} />
+        <meshBasicMaterial color="#397519" transparent opacity={0.16} depthWrite={false} />
       </mesh>
       <mesh position={[0, 0, 0.95]} scale={[0.42, 0.3, 1.05]}>
         <sphereGeometry args={[0.55, 14, 14]} />
@@ -114,27 +114,27 @@ function FlyMesh() {
       </mesh>
       <mesh position={[0, 0.04, 0]}>
         <sphereGeometry args={[0.38, 14, 14]} />
-        <meshStandardMaterial color="#c8ff5a" emissive="#b6ff4a" emissiveIntensity={0.7} />
+        <meshStandardMaterial color="#548b21" emissive="#397519" emissiveIntensity={0.7} />
       </mesh>
       <mesh position={[0, 0.08, -0.52]}>
         <sphereGeometry args={[0.26, 12, 12]} />
-        <meshStandardMaterial color="#f3eee4" roughness={0.28} />
+        <meshStandardMaterial color="#20271e" roughness={0.28} />
       </mesh>
       <mesh position={[0.16, 0.12, -0.62]}>
         <sphereGeometry args={[0.1, 10, 10]} />
-        <meshStandardMaterial color="#ff6b4a" emissive="#ff6b4a" emissiveIntensity={0.7} />
+        <meshStandardMaterial color="#c44129" emissive="#c44129" emissiveIntensity={0.7} />
       </mesh>
       <mesh position={[-0.16, 0.12, -0.62]}>
         <sphereGeometry args={[0.1, 10, 10]} />
-        <meshStandardMaterial color="#ff6b4a" emissive="#ff6b4a" emissiveIntensity={0.7} />
+        <meshStandardMaterial color="#c44129" emissive="#c44129" emissiveIntensity={0.7} />
       </mesh>
       <mesh ref={left} position={[0.3, 0.22, 0.04]} rotation={[0.18, 0.18, 0.4]}>
         <planeGeometry args={[1.4, 0.42]} />
-        <meshStandardMaterial color="#67f0c8" transparent opacity={0.34} side={THREE.DoubleSide} depthWrite={false} />
+        <meshStandardMaterial color="#087b60" transparent opacity={0.34} side={THREE.DoubleSide} depthWrite={false} />
       </mesh>
       <mesh ref={right} position={[-0.3, 0.22, 0.04]} rotation={[0.18, -0.18, -0.4]}>
         <planeGeometry args={[1.4, 0.42]} />
-        <meshStandardMaterial color="#67f0c8" transparent opacity={0.34} side={THREE.DoubleSide} depthWrite={false} />
+        <meshStandardMaterial color="#087b60" transparent opacity={0.34} side={THREE.DoubleSide} depthWrite={false} />
       </mesh>
     </group>
   );
@@ -165,7 +165,7 @@ function Traveler({ points, scale }: { points: THREE.Vector3[]; scale: number })
   if (points.length === 1) {
     return (
       <group position={points[0]} scale={scale}>
-        <pointLight color="#b6ff4a" intensity={2.2} distance={scale * 18} />
+        <pointLight color="#397519" intensity={2.2} distance={scale * 18} />
         <FlyMesh />
       </group>
     );
@@ -173,7 +173,7 @@ function Traveler({ points, scale }: { points: THREE.Vector3[]; scale: number })
 
   return (
     <group ref={ref} scale={scale}>
-      <pointLight color="#b6ff4a" intensity={2.2} distance={scale * 18} />
+      <pointLight color="#397519" intensity={2.2} distance={scale * 18} />
       <FlyMesh />
     </group>
   );
@@ -227,25 +227,25 @@ function SceneBody({ scene, interactive }: { scene: DailyScene; interactive: boo
 
   return (
     <>
-      <color attach="background" args={["#070708"]} />
-      <fog attach="fog" args={["#070708", cam.size * 0.9, cam.size * 3.2]} />
+      <color attach="background" args={["#f7f8f4"]} />
+      <fog attach="fog" args={["#f7f8f4", cam.size * 0.9, cam.size * 3.2]} />
       <ambientLight intensity={0.45} />
-      <pointLight position={[cam.target[0] + cam.size * 0.4, cam.target[1] + cam.size * 0.5, cam.target[2] + cam.size * 0.3]} intensity={1.6} color="#b6ff4a" />
-      <pointLight position={[cam.target[0] - cam.size * 0.3, cam.target[1], cam.target[2]]} intensity={0.8} color="#67f0c8" />
+      <pointLight position={[cam.target[0] + cam.size * 0.4, cam.target[1] + cam.size * 0.5, cam.target[2] + cam.size * 0.3]} intensity={1.6} color="#397519" />
+      <pointLight position={[cam.target[0] - cam.size * 0.3, cam.target[1], cam.target[2]]} intensity={0.8} color="#087b60" />
       {scene.cloud.length ? <Cloud points={scene.cloud} origin={origin} /> : null}
-      {lesson.length > 1 ? <PathLine points={lesson} color="#67f0c8" dashed /> : null}
-      {attempt.length > 1 ? <PathLine points={attempt} color="#b6ff4a" /> : null}
+      {lesson.length > 1 ? <PathLine points={lesson} color="#087b60" dashed /> : null}
+      {attempt.length > 1 ? <PathLine points={attempt} color="#397519" /> : null}
       <HopMarks
         nodes={scene.lesson}
         origin={origin}
-        color="#67f0c8"
+        color="#087b60"
         radius={cam.hopR}
         onPick={interactive ? (id) => router.push(`/neuron/${id}`) : undefined}
       />
       <HopMarks
         nodes={scene.attempt}
         origin={origin}
-        color="#b6ff4a"
+        color="#397519"
         radius={cam.hopR}
         onPick={interactive ? (id) => router.push(`/neuron/${id}`) : undefined}
       />

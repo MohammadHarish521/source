@@ -7,6 +7,8 @@ export async function register() {
     }
     const { refreshIngestStatus, ensureIngest } = await import("./lib/connectome/ingest");
     await refreshIngestStatus();
+    const { startDailyTraining } = await import("./lib/fly/scheduler");
+    startDailyTraining();
     void ensureIngest().catch((error) => {
       console.error("[FLY mongo]", error);
     });

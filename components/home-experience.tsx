@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { BrainScene } from "./brain-scene";
-import { DailyFlyScene } from "./daily-fly-scene";
+import { TrainingObservatory } from "./training-observatory";
 import { LabelChip } from "./label-chip";
 import { formatNumber } from "@/lib/utils";
 import type { CloudPoint, DatasetInfo, RankedNeuron } from "@/lib/connectome/types";
@@ -20,11 +20,12 @@ export function HomeExperience() {
     queryFn: () =>
       fetch("/api/today").then((r) => r.json() as Promise<{ run?: DailyRun; scene?: DailyScene }>),
     enabled: Boolean(dataset.data?.ready.graph),
+    refetchInterval: 60000,
   });
   const cloud = useQuery({
     queryKey: ["cloud"],
     queryFn: () => fetch("/api/brain/cloud").then((r) => r.json() as Promise<{ points: CloudPoint[] }>),
-    enabled: Boolean(dataset.data?.ready.metadata) && !today.data?.scene?.attempt.length,
+    enabled: Boolean(dataset.data?.ready.metadata) && !today.data?.scene?.cloud.length,
   });
   const board = useQuery({
     queryKey: ["board", "most-connected"],
@@ -52,7 +53,7 @@ export function HomeExperience() {
       <section className="relative min-h-[92vh] overflow-hidden">
         <div className="absolute inset-0">
           {scene && (scene.attempt.length || scene.cloud.length) ? (
-            <DailyFlyScene scene={scene} compact />
+            <BrainScene points={scene.cloud} />
           ) : points.length ? (
             <BrainScene points={points} />
           ) : (
@@ -76,7 +77,7 @@ export function HomeExperience() {
             Find yours.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/today" className="border border-[var(--accent)] bg-[var(--accent)] px-5 py-3 font-medium text-[#070708]">
+            <Link href="/today" className="border border-[var(--accent)] bg-[var(--accent)] px-5 py-3 font-medium text-white">
               WATCH TODAY
             </Link>
             <Link href="/explore" className="border border-[var(--paper)] px-5 py-3">
@@ -88,6 +89,8 @@ export function HomeExperience() {
           </div>
         </div>
       </section>
+
+      {run && scene && <div className="mx-auto max-w-7xl px-5 pt-10"><TrainingObservatory key={run.day} run={run} scene={scene} /></div>}
 
       <section className="mx-auto grid max-w-7xl gap-6 px-5 py-16 md:grid-cols-3">
         <Stat label="NEURONS" value={formatNumber(info?.neurons)} note="DATA" />

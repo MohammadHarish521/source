@@ -31,21 +31,21 @@ export async function GET(req: Request) {
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          background: "#070708",
-          color: "#f3eee4",
+          background: "#f7f8f4",
+          color: "#20271e",
           padding: 64,
           fontFamily: "ui-monospace, monospace",
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 22, letterSpacing: 6 }}>
           <span>FLY</span>
-          <span style={{ color: "#b6ff4a" }}>{kind.toUpperCase()}</span>
+          <span style={{ color: "#397519" }}>{kind.toUpperCase()}</span>
         </div>
         <div style={{ display: "flex", flexDirection: "column" }}>
           <div style={{ fontSize: 72, lineHeight: 0.9 }}>{title}</div>
-          <div style={{ marginTop: 24, fontSize: 32, color: "#9a9388" }}>{line2}</div>
+          <div style={{ marginTop: 24, fontSize: 32, color: "#626b5e" }}>{line2}</div>
         </div>
-        <div style={{ color: "#b6ff4a", fontSize: 20, letterSpacing: 4 }}>THE INTERNET’S FLY BRAIN</div>
+        <div style={{ color: "#397519", fontSize: 20, letterSpacing: 4 }}>THE INTERNET’S FLY BRAIN</div>
       </div>
     ),
     { width: 1200, height: 630 },

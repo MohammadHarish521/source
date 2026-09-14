@@ -92,7 +92,18 @@ async function rememberPath(path: Array<{ rootId: string }>) {
   return learned;
 }
 
-export async function runDailyTrain(day = utcDay()): Promise<DailyRun> {
+const training = globalThis as typeof globalThis & { __dailyTraining?: Map<string, Promise<DailyRun>> };
+
+export function runDailyTrain(day = utcDay()): Promise<DailyRun> {
+  const pending = training.__dailyTraining ??= new Map();
+  const existing = pending.get(day);
+  if (existing) return existing;
+  const task = trainDay(day).finally(() => pending.delete(day));
+  pending.set(day, task);
+  return task;
+}
+
+async function trainDay(day: string): Promise<DailyRun> {
   const existing = await getDailyRun(day);
   if (existing) return existing;
 
@@ -214,29 +225,14 @@ async function locateNeurons(ids: string[]): Promise<DailySceneNode[]> {
     };
   });
 
-  const known = raw.filter((n) => n.x != null && n.y != null && n.z != null);
-  if (!known.length) return [];
-
-  return raw.map((node, i) => {
-    if (node.x != null && node.y != null && node.z != null) {
-      return { rootId: node.rootId, cellType: node.cellType, x: node.x, y: node.y, z: node.z };
-    }
-    let prev = i - 1;
-    while (prev >= 0 && raw[prev].x == null) prev -= 1;
-    let next = i + 1;
-    while (next < raw.length && raw[next].x == null) next += 1;
-    const a = prev >= 0 ? raw[prev] : known[0];
-    const b = next < raw.length ? raw[next] : known[known.length - 1];
-    const span = Math.max(1, next - prev);
-    const t = prev >= 0 ? (i - prev) / span : 0;
-    return {
-      rootId: node.rootId,
-      cellType: node.cellType,
-      x: (a.x ?? 0) + ((b.x ?? 0) - (a.x ?? 0)) * t,
-      y: (a.y ?? 0) + ((b.y ?? 0) - (a.y ?? 0)) * t,
-      z: (a.z ?? 0) + ((b.z ?? 0) - (a.z ?? 0)) * t,
-    };
-  });
+  // Missing anatomical positions must never be interpolated into invented locations.
+  return raw.flatMap((node) =>
+    typeof node.x === "number" && Number.isFinite(node.x) &&
+    typeof node.y === "number" && Number.isFinite(node.y) &&
+    typeof node.z === "number" && Number.isFinite(node.z)
+      ? [{ rootId: node.rootId, cellType: node.cellType, x: node.x, y: node.y, z: node.z }]
+      : [],
+  );
 }
 
 function lessonHopsFor(run: DailyRun): DailyHop[] {
@@ -287,7 +283,7 @@ export async function getDailyScene(run: DailyRun): Promise<DailyScene> {
   const [attempt, lesson, cloud] = await Promise.all([
     locateNeurons(run.path.map((hop) => hop.rootId)),
     locateNeurons(lessonHops.map((hop) => hop.rootId)),
-    sampleCloud(2800),
+    sampleCloud(24000),
   ]);
   return { attempt, lesson, cloud };
 }

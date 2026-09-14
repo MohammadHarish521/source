@@ -8,18 +8,18 @@ import * as THREE from "three";
 import type { CloudPoint } from "@/lib/connectome/types";
 
 const CLASS_COLOR: Record<string, string> = {
-  ol_: "#67f0c8",
-  optic: "#67f0c8",
-  visual: "#67f0c8",
-  cb_: "#b6ff4a",
-  central: "#b6ff4a",
-  mushroom: "#d4ff8a",
-  vnc_: "#ffb86b",
-  ventral: "#ffb86b",
-  sensory: "#f3eee4",
-  descending: "#ff6b4a",
-  ascending: "#67c8ff",
-  motor: "#ff6b4a",
+  ol_: "#087b60",
+  optic: "#087b60",
+  visual: "#087b60",
+  cb_: "#397519",
+  central: "#397519",
+  mushroom: "#648c28",
+  vnc_: "#a86519",
+  ventral: "#a86519",
+  sensory: "#20271e",
+  descending: "#c44129",
+  ascending: "#237ab0",
+  motor: "#c44129",
 };
 
 function colorFor(superClass: string | null) {
@@ -90,10 +90,10 @@ export function BrainScene({ points }: { points: CloudPoint[] }) {
   const router = useRouter();
   return (
     <Canvas camera={{ position: [0, 0, 220], fov: 45 }} className="h-full w-full">
-      <color attach="background" args={["#070708"]} />
-      <fog attach="fog" args={["#070708", 180, 420]} />
+      <color attach="background" args={["#f7f8f4"]} />
+      <fog attach="fog" args={["#f7f8f4", 180, 420]} />
       {points.length > 0 && <Cloud points={points} onPick={(id) => router.push(`/neuron/${id}`)} />}
-      <gridHelper args={[400, 20, "#1b1b1c", "#141416"]} position={[0, -90, 0]} />
+      <gridHelper args={[400, 20, "#cbd3c5", "#e1e5dc"]} position={[0, -90, 0]} />
       <OrbitControls enablePan enableZoom enableRotate zoomSpeed={0.7} />
     </Canvas>
   );
